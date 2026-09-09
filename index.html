@@ -966,78 +966,127 @@ function renderInfo(c) {
 function saveNotes(id) { const c = S.courses.find(x => x.id === id); if (!c) return; c.notes = document.getElementById('n-' + id)?.value || ''; saveData(); toast('تم الحفظ', 's'); }
 
 // ══ RESEARCH TAB ══
+const _researchMode = {};
+function switchResearchMode(cid, mode) {
+  // حفظ القيم المكتوبة قبل إعادة الرسم
+  const c = S.courses.find(x=>x.id===cid); if (!c) return;
+  c.researchTopic    = document.getElementById('rt')?.value  ?? c.researchTopic;
+  c.studentName      = document.getElementById('rst')?.value ?? c.studentName;
+  c.supervisorName   = document.getElementById('rsv')?.value ?? c.supervisorName;
+  c.semester         = document.getElementById('rsm')?.value ?? c.semester;
+  c._chapCount       = document.getElementById('rch')?.value ?? c._chapCount;
+  c._pageCount       = document.getElementById('rpg')?.value ?? c._pageCount;
+  c._refCount        = document.getElementById('rrc')?.value ?? c._refCount;
+  c._lang            = document.getElementById('rl')?.value  ?? c._lang;
+  c._refLang         = document.getElementById('rfl')?.value ?? c._refLang;
+  c._refType         = document.getElementById('rft')?.value ?? c._refType;
+  _researchMode[cid] = mode;
+  renderResearch(c);
+}
+
 function renderResearch(c) {
   const el = document.getElementById('tab-research'); if (!el) return;
-  el.innerHTML = `
-    <div class="sbox">
-      <div class="stitle" style="margin-bottom:14px">📄 توليد البحث العلمي الأكاديمي</div>
-      <div class="frow">
-        <div class="ff"><label>عنوان البحث</label><input id="rt" type="text" value="${esc(c.researchTopic||c.name||'')}" placeholder="موضوع البحث..."></div>
-        <div class="ff"><label>اسم الطالب</label><input id="rst" type="text" value="${esc(c.studentName||'')}" placeholder="الاسم الثلاثي الكامل"></div>
-      </div>
-      <div class="frow">
-        <div class="ff"><label>اسم المشرف</label><input id="rsv" type="text" value="${esc(c.supervisorName||'')}" placeholder="د. اسم المشرف"></div>
-        <div class="ff"><label>الفصل الدراسي</label><input id="rsm" type="text" value="${esc(c.semester||'')}" placeholder="ربيع 2025-2026"></div>
-      </div>
-      <div class="frow">
-        <div class="ff"><label>عدد المباحث</label><input id="rch" type="number" min="1" max="10" value="3" placeholder="عدد المباحث" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-family:inherit;font-size:14px"></div>
-        <div class="ff"><label>عدد الصفحات</label><input id="rpg" type="number" min="1" value="8" placeholder="عدد الصفحات" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-family:inherit;font-size:14px"></div>
-        <div class="ff"><label>عدد المراجع</label><input id="rrc" type="number" min="1" value="8" placeholder="عدد المراجع" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-family:inherit;font-size:14px"></div>
-      </div>
-      <div class="frow">
-        <div class="ff"><label>اللغة</label><select id="rl" class="sel"><option value="ar">العربية</option><option value="en">English</option></select></div>
-        <div class="ff"><label>لغة المراجع</label><select id="rfl" class="sel"><option value="ar">عربية فقط 🇸🇦</option><option value="both" selected>عربية وإنجليزية</option><option value="en">إنجليزية فقط</option></select></div>
-        <div class="ff"><label>نوع المراجع</label><select id="rft" class="sel"><option value="books">كتب أكاديمية 📚</option><option value="both" selected>كتب ومقالات</option><option value="articles">مقالات علمية 📄</option></select></div>
-      </div>
+  const mode = _researchMode[c.id] || 'auto';
+
+  const inp = (id,type,val,ph,extra='') =>
+    `<input id="${id}" type="${type}" value="${esc(val)}" placeholder="${ph}" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-family:inherit;font-size:14px" ${extra}>`;
+
+  // ── لوحة التوليد التلقائي ──
+  const autoPanel = `
+    <div style="margin-top:14px">
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <button class="btn btn-p" onclick="genResearch('${c.id}')">🤖 توليد البحث الكامل</button>
         ${c.researchData?`<button class="btn btn-s" onclick="exportWord('${c.id}')">📝 Word</button><button class="btn btn-s" onclick="exportPPT('${c.id}')">📊 PPT</button><button class="btn btn-s" onclick="document.getElementById('refs-${c.id}')?.scrollIntoView({behavior:'smooth'})">📚 المراجع ↓</button><button class="btn" style="background:var(--danger-lt);color:var(--danger)" onclick="clearResearch('${c.id}')">🗑 مسح البحث</button>`:''}
       </div>
-      ${(S.summaryFiles||[]).length ? `<div style="margin-top:8px;padding:8px 12px;background:var(--accent-lt);border-radius:8px;border-right:3px solid var(--accent);font-size:12px;color:var(--accent);direction:rtl">📎 <strong>${S.summaryFiles.length} ملف مرفوع</strong> — سيتم الاستشهاد بها تلقائياً داخل البحث بمجرد التوليد</div>` : `<div style="margin-top:8px;padding:8px 12px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text3);direction:rtl">💡 ارفع ملفاتك (محاضرات أو كتب) من تبويب الاختبار لتظهر الاستشهادات تلقائياً في البحث</div>`}
-    </div>
+      ${(S.summaryFiles||[]).length
+        ? `<div style="margin-top:8px;padding:8px 12px;background:var(--accent-lt);border-radius:8px;border-right:3px solid var(--accent);font-size:12px;color:var(--accent);direction:rtl">📎 <strong>${S.summaryFiles.length} ملف مرفوع</strong> — سيتم الاستشهاد بها تلقائياً داخل البحث بمجرد التوليد</div>`
+        : `<div style="margin-top:8px;padding:8px 12px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text3);direction:rtl">💡 ارفع ملفاتك (محاضرات أو كتب) من تبويب الاختبار لتظهر الاستشهادات تلقائياً في البحث</div>`}
+    </div>`;
 
-    <div class="sbox" style="border-right:4px solid #9B59B6;margin-top:0;padding-top:18px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-        <div class="stitle" style="color:#9B59B6;margin:0">📚 بحث من مصادرك</div>
-        <span style="font-size:11px;color:#9B59B6;background:rgba(155,89,182,.12);border:1px solid rgba(155,89,182,.3);border-radius:99px;padding:2px 9px;font-weight:600">اختياري</span>
+  // ── لوحة بحث من مصادرك ──
+  const sourcesPanel = `
+    <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px">
+      <div style="background:var(--surface2);border-radius:10px;padding:13px 15px;border:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:8px;direction:rtl">
+          <span style="min-width:24px;height:24px;background:#9B59B6;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">1</span>
+          احصل على قائمة الكتب المقترحة
+        </div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:9px;direction:rtl">سيقترح عليك المساعد كتباً مناسبة — ابحث عنها وحمّلها قبل الخطوة التالية</div>
+        <button class="btn btn-s" style="font-size:12px;border-color:#9B59B6;color:#9B59B6" onclick="genBookSuggestions('${c.id}')">🔎 اقترح لي كتباً وأماكن تنزيلها</button>
+        <div id="book-sugg-${c.id}"></div>
       </div>
-      <div style="font-size:12px;color:var(--text3);margin-bottom:16px;direction:rtl">نمط مستقل: اقترح لي كتباً ← حمّلها ← ولّد البحث من محتواها الحقيقي مع استشهادات دقيقة</div>
-
-      <div style="display:flex;flex-direction:column;gap:10px">
-
-        <div style="background:var(--surface2);border-radius:10px;padding:14px 16px;border:1px solid var(--border)">
-          <div style="font-size:13px;font-weight:700;margin-bottom:7px;display:flex;align-items:center;gap:8px;direction:rtl">
-            <span style="width:24px;height:24px;background:#9B59B6;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">1</span>
-            احصل على قائمة الكتب المقترحة
-          </div>
-          <div style="font-size:12px;color:var(--text3);margin-bottom:10px;direction:rtl">سيقترح عليك المساعد كتباً مناسبة لموضوعك — ابحث عنها وحمّلها قبل الخطوة التالية</div>
-          <button class="btn btn-s" style="font-size:12px;border-color:#9B59B6;color:#9B59B6" onclick="genBookSuggestions('${c.id}')">🔎 اقترح لي كتباً وأماكن تنزيلها</button>
-          <div id="book-sugg-${c.id}"></div>
+      <div style="background:var(--surface2);border-radius:10px;padding:13px 15px;border:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:8px;direction:rtl">
+          <span style="min-width:24px;height:24px;background:#9B59B6;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">2</span>
+          ارفع الكتب التي وجدتها
         </div>
-
-        <div style="background:var(--surface2);border-radius:10px;padding:14px 16px;border:1px solid var(--border)">
-          <div style="font-size:13px;font-weight:700;margin-bottom:7px;display:flex;align-items:center;gap:8px;direction:rtl">
-            <span style="width:24px;height:24px;background:#9B59B6;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">2</span>
-            ارفع الكتب التي وجدتها
-          </div>
-          <div style="font-size:12px;color:var(--text3);margin-bottom:10px;direction:rtl">ارفع ملفات PDF أو Word — سيستخلص منها المساعد المعلومات ويوظفها في البحث</div>
-          <input type="file" id="src-up-${c.id}" multiple accept=".pdf,.doc,.docx,.txt,.md" style="display:none" onchange="handleSrcFiles('${c.id}',this)">
-          <button class="btn btn-s" style="font-size:12px" onclick="document.getElementById('src-up-${c.id}').click()">📂 رفع ملفات</button>
-          <div id="src-list-${c.id}" style="margin-top:10px">${renderSrcList(c.id)}</div>
-        </div>
-
-        <div style="background:var(--surface2);border-radius:10px;padding:14px 16px;border:1px solid var(--border)">
-          <div style="font-size:13px;font-weight:700;margin-bottom:7px;display:flex;align-items:center;gap:8px;direction:rtl">
-            <span style="width:24px;height:24px;background:#9B59B6;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">3</span>
-            ولّد البحث كاملاً من مصادرك
-          </div>
-          <div style="font-size:12px;color:var(--text3);margin-bottom:10px;direction:rtl">يستخدم نفس الإعدادات أعلاه (عدد المباحث / الصفحات / اللغة)</div>
-          <button class="btn btn-p" style="background:#9B59B6;border-color:#9B59B6;font-size:13px" onclick="genResearchFromSources('${c.id}')">🚀 توليد البحث من مصادرك</button>
-        </div>
-
+        <div style="font-size:12px;color:var(--text3);margin-bottom:9px;direction:rtl">ارفع ملفات PDF أو Word — سيستخلص منها المساعد المعلومات ويوظفها في البحث</div>
+        <input type="file" id="src-up-${c.id}" multiple accept=".pdf,.doc,.docx,.txt,.md" style="display:none" onchange="handleSrcFiles('${c.id}',this)">
+        <button class="btn btn-s" style="font-size:12px" onclick="document.getElementById('src-up-${c.id}').click()">📂 رفع ملفات</button>
+        <div id="src-list-${c.id}" style="margin-top:9px">${renderSrcList(c.id)}</div>
       </div>
-    </div>
+      <div style="background:var(--surface2);border-radius:10px;padding:13px 15px;border:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:8px;direction:rtl">
+          <span style="min-width:24px;height:24px;background:#9B59B6;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">3</span>
+          ولّد البحث كاملاً من مصادرك
+        </div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:9px;direction:rtl">نفس إعدادات الفورم أعلاه (مباحث / صفحات / لغة) — أسلوب مبسط مناسب لمستواك الجامعي</div>
+        <button class="btn btn-p" style="background:#9B59B6;border-color:#9B59B6" onclick="genResearchFromSources('${c.id}')">🚀 توليد البحث من مصادرك</button>
+      </div>
+    </div>`;
 
+  el.innerHTML = `
+    <div class="sbox">
+      <div class="stitle" style="margin-bottom:14px">📄 توليد البحث العلمي الأكاديمي</div>
+      <div class="frow">
+        <div class="ff"><label>عنوان البحث</label>${inp('rt','text',c.researchTopic||c.name||'','موضوع البحث...')}</div>
+        <div class="ff"><label>اسم الطالب</label>${inp('rst','text',c.studentName||'','الاسم الثلاثي الكامل')}</div>
+      </div>
+      <div class="frow">
+        <div class="ff"><label>اسم المشرف</label>${inp('rsv','text',c.supervisorName||'','د. اسم المشرف')}</div>
+        <div class="ff"><label>الفصل الدراسي</label>${inp('rsm','text',c.semester||'','ربيع 2025-2026')}</div>
+      </div>
+      <div class="frow">
+        <div class="ff"><label>عدد المباحث</label>${inp('rch','number',c._chapCount||'3','عدد المباحث','min="1" max="10"')}</div>
+        <div class="ff"><label>عدد الصفحات</label>${inp('rpg','number',c._pageCount||'8','عدد الصفحات','min="1"')}</div>
+        <div class="ff"><label>عدد المراجع</label>${inp('rrc','number',c._refCount||'8','عدد المراجع','min="1"')}</div>
+      </div>
+      <div class="frow">
+        <div class="ff"><label>اللغة</label>
+          <select id="rl" class="sel">
+            <option value="ar" ${(c._lang||'ar')==='ar'?'selected':''}>العربية</option>
+            <option value="en" ${(c._lang||'ar')==='en'?'selected':''}>English</option>
+          </select>
+        </div>
+        <div class="ff"><label>لغة المراجع</label>
+          <select id="rfl" class="sel">
+            <option value="ar" ${(c._refLang||'both')==='ar'?'selected':''}>عربية فقط 🇸🇦</option>
+            <option value="both" ${(c._refLang||'both')==='both'?'selected':''}>عربية وإنجليزية</option>
+            <option value="en" ${(c._refLang||'both')==='en'?'selected':''}>إنجليزية فقط</option>
+          </select>
+        </div>
+        <div class="ff"><label>نوع المراجع</label>
+          <select id="rft" class="sel">
+            <option value="books" ${(c._refType||'both')==='books'?'selected':''}>كتب أكاديمية 📚</option>
+            <option value="both" ${(c._refType||'both')==='both'?'selected':''}>كتب ومقالات</option>
+            <option value="articles" ${(c._refType||'both')==='articles'?'selected':''}>مقالات علمية 📄</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display:flex;border:1.5px solid var(--border);border-radius:10px;overflow:hidden;margin-top:16px">
+        <button onclick="switchResearchMode('${c.id}','auto')"
+          style="flex:1;padding:11px 8px;background:${mode==='auto'?'var(--accent)':'transparent'};color:${mode==='auto'?'#fff':'var(--text2)'};border:none;cursor:pointer;font-size:13px;font-weight:600;transition:background .2s,color .2s">
+          🤖 توليد تلقائي
+        </button>
+        <button onclick="switchResearchMode('${c.id}','sources')"
+          style="flex:1;padding:11px 8px;background:${mode==='sources'?'#9B59B6':'transparent'};color:${mode==='sources'?'#fff':'var(--text2)'};border:none;border-right:1.5px solid var(--border);cursor:pointer;font-size:13px;font-weight:600;transition:background .2s,color .2s">
+          📚 بحث من مصادرك
+        </button>
+      </div>
+
+      ${mode==='auto' ? autoPanel : sourcesPanel}
+    </div>
     <div id="ro-${c.id}">${c.researchData ? showResearch(c.researchData,c.id) : (c.researchText?`<div class="sbox"><div class="shead"><div class="stitle">📄 بحث سابق</div><div style="display:flex;gap:7px"><button class="btn btn-s btn-sm" onclick="exportWord('${c.id}')">📝 Word</button><button class="btn btn-s btn-sm" onclick="exportPPT('${c.id}')">📊 PPT</button></div></div><div class="ai-out">${esc(c.researchText)}</div></div>`:'')}</div>`;
 }
 
@@ -1362,7 +1411,7 @@ async function genResearch(cid) {
     const conclusionPrompt = isAr
       ? `${ctx}\nهذا بحث عن "${topic}". اكتب هذه الأقسام فقط — يجب كتابة كل نقطة كاملة بدون اختصار أو حذف. لا تستخدم # أو ## في النص أبداً:\n\n===CONCLUSION===\n[اكتب خاتمة أكاديمية شاملة لا تقل عن ${bw} كلمة.]\n\n===RESULTS===\n1. اكتب النتيجة الأولى كاملة هنا\n2. اكتب النتيجة الثانية كاملة هنا\n3. اكتب النتيجة الثالثة كاملة هنا\n4. اكتب النتيجة الرابعة كاملة هنا\n5. اكتب النتيجة الخامسة كاملة هنا\n\n===RECOMMENDATIONS===\n1. اكتب التوصية الأولى كاملة هنا\n2. اكتب التوصية الثانية كاملة هنا\n3. اكتب التوصية الثالثة كاملة هنا\n4. اكتب التوصية الرابعة كاملة هنا`
       : `${ctx}\nWrite ONLY these sections. Write every item in full — no truncation, no # headers ever:\n\n===CONCLUSION===\n[At least ${bw} words.]\n\n===RESULTS===\n1. First finding in full\n2. Second finding in full\n3. Third finding in full\n4. Fourth finding in full\n5. Fifth finding in full\n\n===RECOMMENDATIONS===\n1. First recommendation in full\n2. Second recommendation in full\n3. Third recommendation in full\n4. Fourth recommendation in full`;
-    allText += await callAI(conclusionPrompt, null, 6000) + '\n';
+    allText += await callAI(conclusionPrompt, null, 8000) + '\n';
 
     // ── جلب كتب حقيقية من archive.org ──
     setProgress(isAr ? '🔍 جاري البحث عن كتب حقيقية في archive.org...' : '🔍 Fetching real books from archive.org...');
@@ -1572,7 +1621,7 @@ async function genResearchFromSources(cid) {
     const conclusionPrompt = isAr
       ? `${ctx}\nاكتب:\n\n===CONCLUSION===\n[خاتمة لا تقل عن ${bw} كلمة.]\n\n===RESULTS===\n1. النتيجة الأولى\n2. النتيجة الثانية\n3. النتيجة الثالثة\n4. النتيجة الرابعة\n5. النتيجة الخامسة\n\n===RECOMMENDATIONS===\n1. التوصية الأولى\n2. التوصية الثانية\n3. التوصية الثالثة\n4. التوصية الرابعة`
       : `${ctx}\nWrite:\n\n===CONCLUSION===\n[At least ${bw} words.]\n\n===RESULTS===\n1. ...\n2. ...\n3. ...\n\n===RECOMMENDATIONS===\n1. ...\n2. ...\n3. ...`;
-    allText += await callAI(conclusionPrompt, null, 5000) + '\n';
+    allText += await callAI(conclusionPrompt, null, 7000) + '\n';
 
     setProgress(isAr ? '📚 بناء قائمة المراجع من مصادرك...' : '📚 Building references...');
     const filesCtx = fileNamesList.map((n,i)=>`${i+1}. ${n}`).join('\n');
@@ -1820,7 +1869,6 @@ async function exportPlanWord(cid) {
     });
     const doc = new Document({ sections:[{ properties:{page:{margin:{top:1134,bottom:1134,left:1134,right:1134}}}, children }] });
     const blob = await Packer.toBlob(doc);
-    const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`جدول_${c.name.replace(/[^\w؀-ۿ ]/g,'')}.docx`;
     const urlP = URL.createObjectURL(blob);
     const aP = document.createElement('a'); aP.href=urlP; aP.download=`جدول_${c.name.replace(/[^\w؀-ۿ ]/g,'')}.docx`;
     document.body.appendChild(aP); aP.click();
