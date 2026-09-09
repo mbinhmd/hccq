@@ -995,6 +995,49 @@ function renderResearch(c) {
       </div>
       ${(S.summaryFiles||[]).length ? `<div style="margin-top:8px;padding:8px 12px;background:var(--accent-lt);border-radius:8px;border-right:3px solid var(--accent);font-size:12px;color:var(--accent);direction:rtl">📎 <strong>${S.summaryFiles.length} ملف مرفوع</strong> — سيتم الاستشهاد بها تلقائياً داخل البحث بمجرد التوليد</div>` : `<div style="margin-top:8px;padding:8px 12px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text3);direction:rtl">💡 ارفع ملفاتك (محاضرات أو كتب) من تبويب الاختبار لتظهر الاستشهادات تلقائياً في البحث</div>`}
     </div>
+
+    <div class="sbox" style="border-right:4px solid #9B59B6;margin-top:0;padding-top:18px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <div class="stitle" style="color:#9B59B6;margin:0">📚 بحث من مصادرك</div>
+        <span style="font-size:11px;color:#9B59B6;background:rgba(155,89,182,.12);border:1px solid rgba(155,89,182,.3);border-radius:99px;padding:2px 9px;font-weight:600">اختياري</span>
+      </div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:16px;direction:rtl">نمط مستقل: اقترح لي كتباً ← حمّلها ← ولّد البحث من محتواها الحقيقي مع استشهادات دقيقة</div>
+
+      <div style="display:flex;flex-direction:column;gap:10px">
+
+        <div style="background:var(--surface2);border-radius:10px;padding:14px 16px;border:1px solid var(--border)">
+          <div style="font-size:13px;font-weight:700;margin-bottom:7px;display:flex;align-items:center;gap:8px;direction:rtl">
+            <span style="width:24px;height:24px;background:#9B59B6;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">1</span>
+            احصل على قائمة الكتب المقترحة
+          </div>
+          <div style="font-size:12px;color:var(--text3);margin-bottom:10px;direction:rtl">سيقترح عليك المساعد كتباً مناسبة لموضوعك — ابحث عنها وحمّلها قبل الخطوة التالية</div>
+          <button class="btn btn-s" style="font-size:12px;border-color:#9B59B6;color:#9B59B6" onclick="genBookSuggestions('${c.id}')">🔎 اقترح لي كتباً وأماكن تنزيلها</button>
+          <div id="book-sugg-${c.id}"></div>
+        </div>
+
+        <div style="background:var(--surface2);border-radius:10px;padding:14px 16px;border:1px solid var(--border)">
+          <div style="font-size:13px;font-weight:700;margin-bottom:7px;display:flex;align-items:center;gap:8px;direction:rtl">
+            <span style="width:24px;height:24px;background:#9B59B6;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">2</span>
+            ارفع الكتب التي وجدتها
+          </div>
+          <div style="font-size:12px;color:var(--text3);margin-bottom:10px;direction:rtl">ارفع ملفات PDF أو Word — سيستخلص منها المساعد المعلومات ويوظفها في البحث</div>
+          <input type="file" id="src-up-${c.id}" multiple accept=".pdf,.doc,.docx,.txt,.md" style="display:none" onchange="handleSrcFiles('${c.id}',this)">
+          <button class="btn btn-s" style="font-size:12px" onclick="document.getElementById('src-up-${c.id}').click()">📂 رفع ملفات</button>
+          <div id="src-list-${c.id}" style="margin-top:10px">${renderSrcList(c.id)}</div>
+        </div>
+
+        <div style="background:var(--surface2);border-radius:10px;padding:14px 16px;border:1px solid var(--border)">
+          <div style="font-size:13px;font-weight:700;margin-bottom:7px;display:flex;align-items:center;gap:8px;direction:rtl">
+            <span style="width:24px;height:24px;background:#9B59B6;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">3</span>
+            ولّد البحث كاملاً من مصادرك
+          </div>
+          <div style="font-size:12px;color:var(--text3);margin-bottom:10px;direction:rtl">يستخدم نفس الإعدادات أعلاه (عدد المباحث / الصفحات / اللغة)</div>
+          <button class="btn btn-p" style="background:#9B59B6;border-color:#9B59B6;font-size:13px" onclick="genResearchFromSources('${c.id}')">🚀 توليد البحث من مصادرك</button>
+        </div>
+
+      </div>
+    </div>
+
     <div id="ro-${c.id}">${c.researchData ? showResearch(c.researchData,c.id) : (c.researchText?`<div class="sbox"><div class="shead"><div class="stitle">📄 بحث سابق</div><div style="display:flex;gap:7px"><button class="btn btn-s btn-sm" onclick="exportWord('${c.id}')">📝 Word</button><button class="btn btn-s btn-sm" onclick="exportPPT('${c.id}')">📊 PPT</button></div></div><div class="ai-out">${esc(c.researchText)}</div></div>`:'')}</div>`;
 }
 
@@ -1072,8 +1115,8 @@ function showResearch(d, cid) {
           const kw2 = (archiveKeywords(title, 2) || title.split(' ').filter(w=>w.length>3).slice(0,2).join(' ')).trim();
           const enQ  = encodeURIComponent(title.slice(0,60));
           const arQ2 = encodeURIComponent(kw2);
-          // noor-book: Google site search — guaranteed to work, no broken URL issue
-          const noorUrl = `https://www.google.com/search?q=site:noor-book.com+${encodeURIComponent(kw2+' '+author).trim()}`;
+          // Google Books — reliable Arabic book search with download previews
+          const noorUrl = `https://books.google.com/books?q=${encodeURIComponent(kw2+' '+author)}&hl=ar`;
           // archive.org: direct link if we have real identifier, otherwise short keyword search
           const archiveDirectUrl = isArchiveId ? `https://archive.org/details/${sq}` : null;
           const archiveSearchUrl = isAr
@@ -1095,7 +1138,7 @@ function showResearch(d, cid) {
                       ? btn(archiveDirectUrl,'#C0392B','📥 تنزيل مباشر — Archive.org')
                       : btn(archiveSearchUrl,'#7F8C8D','🏛 بحث في Archive.org')
                     }
-                    ${btn(noorUrl,'#1B6CA8','📗 بحث في مكتبة نور')}
+                    ${btn(noorUrl,'#1B6CA8','📘 Google Books')}
                   ` : `
                     ${outb(schUrl,'var(--accent)','🔍 Google Scholar')}
                     ${outb(rgUrl,'#00A0B4','📄 ResearchGate')}
@@ -1362,6 +1405,197 @@ async function genResearch(cid) {
     toast(`تم توليد البحث (${pageCount} صفحة — ${chapCount+3} طلب) ✓`, 's');
   } catch(e) {
     out.innerHTML = `<div class="sbox"><div style="color:var(--danger);padding:12px">❌ ${esc(e.message)}</div></div>`;
+    toast('فشل التوليد: ' + e.message, 'e', 7000);
+  }
+}
+
+// ══ بحث من مصادرك ══
+const _srcFiles = {};
+
+function renderSrcList(cid) {
+  const files = _srcFiles[cid] || [];
+  if (!files.length) return `<div style="font-size:12px;color:var(--text3);direction:rtl">لم يُرفع أي ملف بعد</div>`;
+  return files.map((f,i) => `<div style="font-size:12px;display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface);border-radius:7px;margin-bottom:5px;direction:rtl">
+    <span style="flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;text-align:right">📄 ${esc(f.name)}</span>
+    <span style="color:var(--text3);white-space:nowrap">${(f.size/1024/1024).toFixed(1)} MB</span>
+    <button onclick="removeSrcFile('${cid}',${i})" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px;padding:0 4px;line-height:1" title="حذف">✕</button>
+  </div>`).join('');
+}
+
+function handleSrcFiles(cid, input) {
+  if (!_srcFiles[cid]) _srcFiles[cid] = [];
+  Array.from(input.files).forEach(f => {
+    if (!_srcFiles[cid].some(x=>x.name===f.name)) _srcFiles[cid].push(f);
+  });
+  input.value = '';
+  const el = document.getElementById('src-list-'+cid);
+  if (el) el.innerHTML = renderSrcList(cid);
+  toast(`تم رفع ${_srcFiles[cid].length} ملف ✓`, 's');
+}
+
+function removeSrcFile(cid, idx) {
+  if (_srcFiles[cid]) _srcFiles[cid].splice(idx, 1);
+  const el = document.getElementById('src-list-'+cid);
+  if (el) el.innerHTML = renderSrcList(cid);
+}
+
+async function genBookSuggestions(cid) {
+  const c = S.courses.find(x=>x.id===cid); if (!c) return;
+  const topic = (document.getElementById('rt')?.value||'').trim() || c.researchTopic || c.name;
+  const refLang = document.getElementById('rfl')?.value||'both';
+  const refType = document.getElementById('rft')?.value||'both';
+  const el = document.getElementById('book-sugg-'+cid); if (!el) return;
+
+  el.innerHTML = `<div style="padding:14px 0;text-align:center;color:var(--text3);font-size:13px"><div class="dp" style="justify-content:center;gap:8px;margin-bottom:8px"><span></span><span></span><span></span></div>جاري اقتراح الكتب...</div>`;
+
+  const langLabel = refLang==='ar' ? 'عربية فقط' : refLang==='en' ? 'إنجليزية فقط' : 'عربية وإنجليزية';
+  const typeLabel = refType==='books' ? 'كتب أكاديمية مطبوعة فقط' : refType==='articles' ? 'مقالات علمية محكّمة فقط' : 'كتب ومقالات أكاديمية';
+
+  try {
+    const prompt = `أنت مكتبي أكاديمي متخصص. الموضوع: "${topic}".\nاقترح 10 ${typeLabel} (${langLabel}) مناسبة جداً لهذا الموضوع — أسماء حقيقية موجودة فعلاً.\nلكل مصدر اكتب سطراً واحداً بالتنسيق:\nالمؤلف الأخير، الاسم. (السنة). عنوان الكتاب الكامل. المدينة: الناشر.\nاكتب فقط القائمة المرقّمة بدون أي مقدمة أو تعليق.`;
+    const result = await callAI(prompt, null, 3000);
+    const lines = result.split('\n').map(l=>l.trim()).filter(l=>l.length>10 && /^\d+[\.\)]\s/.test(l));
+
+    if (!lines.length) { el.innerHTML = `<div style="color:var(--danger);font-size:12px;padding:8px 0">لم تُستلم نتائج — حاول مرة أخرى</div>`; return; }
+
+    el.innerHTML = `<div style="margin-top:12px">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px;direction:rtl">📌 انقر على أي رابط للبحث عن الكتاب — ثم ارفعه في الخطوة 2</div>
+      ${lines.map(line => {
+        const cit = line.replace(/^\d+[\.\)]\s*/,'');
+        const title = extractBookTitle(cit);
+        const author = extractAuthorLastName(cit);
+        const isAr = /[؀-ۿ]/.test(cit);
+        const kw2 = (archiveKeywords(title,2) || title.split(' ').filter(w=>w.length>3).slice(0,2).join(' ')).trim();
+        const archiveUrl = isAr
+          ? `https://archive.org/search?query=${encodeURIComponent(kw2)}&and%5B%5D=language%3A%22Arabic%22&and%5B%5D=mediatype%3A%22texts%22`
+          : `https://archive.org/search?query=${encodeURIComponent(title.slice(0,60))}&and%5B%5D=mediatype%3A%22texts%22`;
+        const googleUrl = `https://books.google.com/books?q=${encodeURIComponent(kw2+' '+author)}&hl=ar`;
+        return `<div style="padding:10px 13px;background:var(--surface);border-radius:8px;margin-bottom:7px;border:1px solid var(--border)">
+          <div style="font-size:12px;line-height:1.9;margin-bottom:8px;direction:rtl;text-align:right">${esc(cit)}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <a href="${archiveUrl}" target="_blank" rel="noopener" style="font-size:11px;color:#fff;background:#7F8C8D;border-radius:6px;padding:5px 11px;text-decoration:none;font-weight:700">🏛 Archive.org</a>
+            <a href="${googleUrl}" target="_blank" rel="noopener" style="font-size:11px;color:#fff;background:#1B6CA8;border-radius:6px;padding:5px 11px;text-decoration:none;font-weight:700">📘 Google Books</a>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  } catch(e) {
+    el.innerHTML = `<div style="color:var(--danger);font-size:12px;padding:8px 0">خطأ: ${esc(e.message)}</div>`;
+  }
+}
+
+async function genResearchFromSources(cid) {
+  const c = S.courses.find(x=>x.id===cid); if (!c) return;
+  const files = _srcFiles[cid] || [];
+  if (!files.length) { toast('ارفع ملفات مصادرك أولاً في الخطوة 2', 'e', 4000); return; }
+
+  const topic = (document.getElementById('rt')?.value||'').trim() || c.researchTopic || c.name;
+  const student = (document.getElementById('rst')?.value||'').trim();
+  const supervisor = (document.getElementById('rsv')?.value||'').trim();
+  const semester = (document.getElementById('rsm')?.value||'').trim();
+  const chapCount = Math.max(1, parseInt(document.getElementById('rch')?.value||'3'));
+  const pageCount = Math.max(1, parseInt(document.getElementById('rpg')?.value||'8'));
+  const lang = document.getElementById('rl')?.value||'ar';
+  const isAr = lang==='ar';
+  c.studentName=student; c.supervisorName=supervisor; c.semester=semester;
+
+  const out = document.getElementById('ro-'+cid);
+  const chNums = ['الأول','الثاني','الثالث','الرابع','الخامس','السادس','السابع','الثامن','التاسع','العاشر'];
+  const totalWords = pageCount * 420;
+  const frontWords = Math.round(totalWords * 0.20);
+  const chWords = Math.round(totalWords * 0.60 / chapCount);
+  const backWords = Math.round(totalWords * 0.20);
+  const totalSteps = 5 + chapCount;
+  let step = 0;
+
+  const setProgress = (msg) => {
+    step++;
+    const pct = Math.round(step / totalSteps * 100);
+    out.innerHTML = `<div class="sbox" style="text-align:center;padding:44px">
+      <div class="dp" style="justify-content:center;gap:10px;margin-bottom:16px"><span></span><span></span><span></span></div>
+      <div style="font-size:15px;font-weight:600">${esc(msg)}</div>
+      <div style="background:var(--border);border-radius:99px;height:6px;margin:16px auto;max-width:260px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:#9B59B6;border-radius:99px;transition:width .4s"></div>
+      </div>
+      <div style="font-size:12px;color:var(--text3)">${step} من ${totalSteps} خطوة • يستخلص من مصادرك</div>
+    </div>`;
+  };
+
+  try {
+    setProgress(isAr ? '📂 جاري قراءة ملفاتك...' : '📂 Reading your files...');
+
+    const allChunks = [];
+    const srcLegend = [];
+    const fileNamesList = [];
+
+    for (const f of files) {
+      try {
+        const txt = (await extractText(f)).slice(0, 14000);
+        if (!txt.trim()) continue;
+        const idx = srcLegend.length;
+        srcLegend.push({ label:`م${idx+1}`, fileName:f.name });
+        srcChunks(txt, f.name, idx).forEach(ch => allChunks.push(ch));
+        fileNamesList.push(f.name.replace(/\.(pdf|docx?|txt|md)$/i,''));
+      } catch {}
+    }
+
+    if (!allChunks.length) {
+      out.innerHTML = `<div class="sbox"><div style="color:var(--danger);padding:16px;direction:rtl">❌ تعذّر قراءة الملفات. تأكد أنها PDF أو Word أو نص عادي وأنها تحتوي على نصوص.</div></div>`;
+      return;
+    }
+
+    const ctx = isAr
+      ? `موضوع البحث: "${topic}" — المقرر: "${c.name}"\nالأسلوب: فصحى أكاديمية واضحة ومفهومة، مناسبة لمستوى طالب جامعي — ابتعد عن التعقيد والمصطلحات المعقدة غير الضرورية. اكتب بحثاً أكاديمياً شاملاً من معلوماتك، وعزّز الأفكار بالمصادر المرفوعة. ضع [م1] أو [م2] في نهاية كل جملة مدعومة بمصدر. تحظر: # أو ## أو ...`
+      : `Research topic: "${topic}" — Course: "${c.name}"\nStyle: clear academic English for undergraduate level — avoid unnecessary complexity. Write comprehensive research from your knowledge and support ideas with uploaded sources. Place [s1] or [s2] after each supported sentence. FORBIDDEN: # headers, ...`;
+    const citNote = isAr ? '\nمهم: اكتب بأسلوب أكاديمي مبسط واضح يناسب الطالب الجامعي. استعن بالمصادر المرفوعة لتعزيز أفكارك — ضع [م1] أو [م2] في نهاية كل جملة مأخوذة أو مدعومة منها.' : '\nIMPORTANT: Write clearly at undergraduate level. Use attached sources to support ideas — mark each supported sentence with [s1] or [s2].';
+
+    let allText = '';
+
+    setProgress(isAr ? '🖊 كتابة المقدمة ومشكلة البحث...' : '✍ Writing introduction...');
+    const fw1=Math.round(frontWords*0.55), fw2=Math.round(frontWords*0.25);
+    const frontPrompt = isAr
+      ? `${ctx}${citNote}\n\n===TITLE===\nالعنوان الكامل للبحث\n\n===INTRO===\n[اكتب مقدمة أكاديمية لا تقل عن ${fw1} كلمة مستخلصة من مصادرك.]\n\n===PROBLEM===\n[اكتب مشكلة البحث لا تقل عن ${fw2} كلمة.]\n\n===QUESTIONS===\n1. التساؤل الأول؟\n2. التساؤل الثاني؟\n3. التساؤل الثالث؟`
+      : `${ctx}${citNote}\n\n===TITLE===\nFull title\n\n===INTRO===\n[At least ${fw1} words from your sources.]\n\n===PROBLEM===\n[At least ${fw2} words.]\n\n===QUESTIONS===\n1. ...\n2. ...\n3. ...`;
+    allText += await callAI(frontPrompt + chunksCtx(rankChunks(allChunks, topic+' مقدمة تمهيد', 7), srcLegend), null, 8000) + '\n';
+
+    for (let i=1; i<=chapCount; i++) {
+      setProgress(isAr ? `🖊 كتابة المبحث ${chNums[i-1]}...` : `✍ Writing chapter ${i}...`);
+      const sw=Math.round(chWords*0.5);
+      const chPrompt = isAr
+        ? `${ctx}${citNote}\nاكتب المبحث ${chNums[i-1]} فقط:\n\n===CH${i}_TITLE===\nعنوان المبحث\n\n===CH${i}_S1_TITLE===\nعنوان الفرع الأول\n\n===CH${i}_S1_CONTENT===\n[لا يقل عن ${sw} كلمة من مصادرك.]\n\n===CH${i}_S2_TITLE===\nعنوان الفرع الثاني\n\n===CH${i}_S2_CONTENT===\n[لا يقل عن ${sw} كلمة من مصادرك.]`
+        : `${ctx}${citNote}\nWrite chapter ${i} only:\n\n===CH${i}_TITLE===\n...\n\n===CH${i}_S1_TITLE===\n...\n\n===CH${i}_S1_CONTENT===\n[At least ${sw} words from sources.]\n\n===CH${i}_S2_TITLE===\n...\n\n===CH${i}_S2_CONTENT===\n[At least ${sw} words from sources.]`;
+      allText += await callAI(chPrompt + chunksCtx(rankChunks(allChunks, topic+' '+chNums[i-1], 7), srcLegend), null, 8000) + '\n';
+    }
+
+    setProgress(isAr ? '🖊 كتابة الخاتمة والنتائج...' : '✍ Writing conclusion...');
+    const bw=Math.round(backWords*0.4);
+    const conclusionPrompt = isAr
+      ? `${ctx}\nاكتب:\n\n===CONCLUSION===\n[خاتمة لا تقل عن ${bw} كلمة.]\n\n===RESULTS===\n1. النتيجة الأولى\n2. النتيجة الثانية\n3. النتيجة الثالثة\n4. النتيجة الرابعة\n5. النتيجة الخامسة\n\n===RECOMMENDATIONS===\n1. التوصية الأولى\n2. التوصية الثانية\n3. التوصية الثالثة\n4. التوصية الرابعة`
+      : `${ctx}\nWrite:\n\n===CONCLUSION===\n[At least ${bw} words.]\n\n===RESULTS===\n1. ...\n2. ...\n3. ...\n\n===RECOMMENDATIONS===\n1. ...\n2. ...\n3. ...`;
+    allText += await callAI(conclusionPrompt, null, 5000) + '\n';
+
+    setProgress(isAr ? '📚 بناء قائمة المراجع من مصادرك...' : '📚 Building references...');
+    const filesCtx = fileNamesList.map((n,i)=>`${i+1}. ${n}`).join('\n');
+    const refsPrompt = isAr
+      ? `موضوع البحث: "${topic}". هذه هي الملفات التي رفعها الباحث كمصادر:\n${filesCtx}\n\nحوّل كل ملف لمرجع بتنسيق APA عربي كامل. استنتج المؤلف والسنة والناشر من اسم الملف إذا أمكن — وإلا استخدم اسم الملف كعنوان مع ناشر تقديري.\n\n===REFS===\n${fileNamesList.map((_,i)=>`${i+1}. ...`).join('\n')}`
+      : `Research topic: "${topic}". Uploaded files:\n${filesCtx}\n\nConvert each to APA format. Infer author/year/publisher from filename where possible.\n\n===REFS===\n${fileNamesList.map((_,i)=>`${i+1}. ...`).join('\n')}`;
+    allText += await callAI(refsPrompt, null, 3000);
+
+    setProgress(isAr ? '⚙️ تجميع البحث...' : '⚙️ Assembling...');
+    const data = parseResearchText(allText, chapCount);
+    data.dept=c.name; data.course=c.name;
+    data.student=student; data.supervisor=supervisor; data.semester=semester;
+    if (!data.title) data.title = topic;
+
+    c.researchData=data; c.researchTopic=topic;
+    c.researchText=buildFlatText(data);
+    c.references=data.references.map(r=>r.citation||r);
+    c.srcLegend=srcLegend;
+    saveData();
+    out.innerHTML = showResearch(data, cid);
+    toast(`تم توليد البحث من ${files.length} مصدر ✓`, 's');
+  } catch(e) {
+    out.innerHTML = `<div class="sbox"><div style="color:var(--danger);padding:16px;direction:rtl">❌ ${esc(e.message)}</div></div>`;
     toast('فشل التوليد: ' + e.message, 'e', 7000);
   }
 }
