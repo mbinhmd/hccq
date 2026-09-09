@@ -1217,12 +1217,15 @@ function clearResearch(cid) {
 }
 
 function parseResearchText(text, chapCount) {
-  // Clean AI truncation artifacts: ...# ...## === at end of sections
   const cleanBody = s => s
-    .replace(/\.{2,}\s*#{0,6}\s*$/gm, '.')   // "...##" at line end
-    .replace(/\s*#{1,6}\s*$/gm, '')           // trailing # headers
-    .replace(/===\w+===[^\n]*/g, '')           // stray section markers
-    .replace(/\[.*?اكتب.*?\]/g, '')            // instruction placeholders left by AI
+    .replace(/\.{2,}\s*#{0,6}\s*$/gm, '.')         // "...##" at line end
+    .replace(/^\s*#{1,6}\s+[^\n]*/gm, '')           // ## headings at line start (e.g. ## الفرع)
+    .replace(/\s*#{1,6}\s*$/gm, '')                  // trailing # at line end
+    .replace(/===\w+===[^\n]*/g, '')                 // stray section markers
+    .replace(/\[.*?اكتب.*?\]/g, '')                  // instruction placeholders
+    .replace(/\*{1,2}[^*]{0,60}(?:كلمة|كلمات)[^*]{0,40}\*{1,2}/g, '')  // **الكلمات الإجمالية...** metadata
+    .replace(/^\d{1,2}[\.\)]\s+/gm, '')             // remove leading numbers like "7. " "8. " from prose lines
+    .replace(/\n{3,}/g, '\n\n')                      // collapse excessive blank lines
     .trim();
   const parts = text.split(/===([A-Z0-9_]+)===/);
   const sec = {};
@@ -1399,8 +1402,8 @@ async function genResearch(cid) {
       setProgress(isAr ? `🖊 كتابة المبحث ${chNums[i-1]}...` : `✍ Writing chapter ${i}...`);
       const sw = Math.round(chWords*0.5);
       const chPrompt = isAr
-        ? `${ctx}${citNote}\nهذا بحث عن "${topic}". اكتب المبحث ${chNums[i-1]} فقط بهذا التنسيق. كل قسم فرعي يجب أن لا يقل عن ${sw} كلمة:\n\n===CH${i}_TITLE===\nعنوان المبحث ${chNums[i-1]} المرتبط بموضوع البحث\n\n===CH${i}_S1_TITLE===\nعنوان القسم الفرعي الأول\n\n===CH${i}_S1_CONTENT===\n[اكتب لا يقل عن ${sw} كلمة. محتوى أكاديمي مفصل مع مفاهيم نظرية، نقاشات علمية، استشهادات بأسماء باحثين وكتب حقيقية. لا تختصر.]\n\n===CH${i}_S2_TITLE===\nعنوان القسم الفرعي الثاني\n\n===CH${i}_S2_CONTENT===\n[اكتب لا يقل عن ${sw} كلمة. محتوى أكاديمي مفصل مع تحليل وتوسع في الأفكار. لا تختصر.]`
-        : `${ctx}${citNote}\nWrite ONLY chapter ${i} in this exact format. Each sub-section MUST be at least ${sw} words:\n\n===CH${i}_TITLE===\nChapter ${i} title relevant to topic\n\n===CH${i}_S1_TITLE===\nSub-section 1 title\n\n===CH${i}_S1_CONTENT===\n[Write at least ${sw} words. Detailed academic content with theory, scholarly discussion, citations from real authors and books. Do not abbreviate.]\n\n===CH${i}_S2_TITLE===\nSub-section 2 title\n\n===CH${i}_S2_CONTENT===\n[Write at least ${sw} words. Detailed academic analysis with expanded ideas. Do not abbreviate.]`;
+        ? `${ctx}${citNote}\nهذا بحث عن "${topic}". اكتب المبحث ${chNums[i-1]} فقط. قاعدة صارمة: اكتب كل محتوى الفرع في فقرات نثرية متصلة — لا تضع أرقاماً أمام الجمل أو الفقرات، لا نقاط، لا قوائم — فقرات أكاديمية متماسكة فقط:\n\n===CH${i}_TITLE===\nعنوان المبحث ${chNums[i-1]} المرتبط بموضوع البحث\n\n===CH${i}_S1_TITLE===\nعنوان القسم الفرعي الأول\n\n===CH${i}_S1_CONTENT===\n[اكتب لا يقل عن ${sw} كلمة في فقرات نثرية أكاديمية متماسكة بدون أي ترقيم للفقرات. تحليل أكاديمي عميق مع استشهادات بأسماء باحثين وكتب حقيقية.]\n\n===CH${i}_S2_TITLE===\nعنوان القسم الفرعي الثاني\n\n===CH${i}_S2_CONTENT===\n[اكتب لا يقل عن ${sw} كلمة في فقرات نثرية أكاديمية متماسكة بدون أي ترقيم للفقرات. تحليل معمّق وتوسع في الأفكار.]`
+        : `${ctx}${citNote}\nWrite ONLY chapter ${i}. STRICT RULE: write all content as flowing prose paragraphs — no numbers before sentences or paragraphs, no bullet points, no lists — only cohesive academic prose:\n\n===CH${i}_TITLE===\nChapter ${i} title relevant to topic\n\n===CH${i}_S1_TITLE===\nSub-section 1 title\n\n===CH${i}_S1_CONTENT===\n[Write at least ${sw} words as flowing prose paragraphs without any paragraph numbering. Deep academic analysis with real author/book citations.]\n\n===CH${i}_S2_TITLE===\nSub-section 2 title\n\n===CH${i}_S2_CONTENT===\n[Write at least ${sw} words as flowing prose paragraphs without any paragraph numbering. In-depth analysis.]`;
       const srcCh = hasSrc ? chunksCtx(rankChunks(allChunks, topic+' '+chNums[i-1], 7), srcLegend) : '';
       allText += await callAI(chPrompt + srcCh, null, 8000) + '\n';
     }
@@ -1885,49 +1888,158 @@ async function exportWord(cid) {
   if (!c?.researchData && !c?.researchText) { toast('لا يوجد بحث', 'e'); return; }
   try {
     if (!window.docx) throw new Error('مكتبة docx لم تُحمَّل');
-    const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = window.docx;
+    const { Document, Packer, Paragraph, TextRun, AlignmentType } = window.docx;
     const d = c.researchData;
     const children = [];
     const nums = ['الأول','الثاني','الثالث','الرابع','الخامس'];
-    const just = AlignmentType.BOTH; const ctr = AlignmentType.CENTER;
-    const p = (text,opts={})=> new Paragraph({ children:[new TextRun({text:String(text||''),size:24,...opts})], alignment:just });
-    const h = (text,level,pb)=> new Paragraph({text:String(text||''),heading:level,pageBreakBefore:!!pb});
-    const gap = ()=> new Paragraph({children:[new TextRun({text:''})]});
+    const ACCENT = '1A5F7A';
+    const ctr = AlignmentType.CENTER;
+    const right = AlignmentType.RIGHT;
+    const just = AlignmentType.BOTH;
+
+    // Strip [م1] citation markers and **bold** markdown
+    const clean = s => String(s||'')
+      .replace(/\[م\d+\]/g,'')
+      .replace(/\*{1,2}([^*\n]+)\*{1,2}/g,'$1')
+      .replace(/_{1,2}([^_\n]+)_{1,2}/g,'$1')
+      .trim();
+
+    // Body paragraph: 13pt, justified, RTL, 1.5 line spacing
+    const p = (text, color='111111') => new Paragraph({
+      children: [new TextRun({ text: clean(text), size: 26, color })],
+      alignment: just, bidirectional: true,
+      spacing: { before: 60, after: 80, line: 360, lineRule: 'auto' }
+    });
+
+    // Centered for cover page
+    const pc = (text, size=24, color='111111', bold=false) => new Paragraph({
+      children: [new TextRun({ text: clean(text), size, color, bold })],
+      alignment: ctr, bidirectional: true,
+      spacing: { before: 60, after: 60 }
+    });
+
+    // Small blank gap
+    const gap = () => new Paragraph({ children:[new TextRun({text:'',size:18})], spacing:{before:0,after:0} });
+
+    // Major section heading — blue, 17pt, with bottom border
+    const h1 = (text, pageBreak=false) => new Paragraph({
+      children: [new TextRun({ text: clean(text), bold: true, size: 34, color: ACCENT })],
+      pageBreakBefore: pageBreak, alignment: right, bidirectional: true,
+      spacing: { before: 260, after: 160 },
+      border: { bottom: { style: 'single', size: 8, color: ACCENT, space: 6 } }
+    });
+
+    // Subsection heading — darker teal, 14pt
+    const h2 = (text) => new Paragraph({
+      children: [new TextRun({ text: clean(text), bold: true, size: 28, color: '145472' })],
+      alignment: right, bidirectional: true,
+      spacing: { before: 180, after: 100 }
+    });
+
+    // Numbered list item
+    const li = (text, i) => new Paragraph({
+      children: [
+        new TextRun({ text: `${i+1}. `, bold: true, size: 24, color: ACCENT }),
+        new TextRun({ text: clean(text), size: 24, color: '222222' })
+      ],
+      alignment: right, bidirectional: true,
+      spacing: { before: 60, after: 60 }
+    });
 
     if (d) {
-      // Cover
-      children.push(new Paragraph({children:[new TextRun({text:d.dept||c.name,size:24,color:'1A5F7A'})],alignment:ctr}));
-      children.push(gap());children.push(gap());
-      children.push(new Paragraph({children:[new TextRun({text:d.title,bold:true,size:36})],alignment:ctr}));
-      children.push(gap());children.push(gap());children.push(gap());
-      if(d.student) children.push(new Paragraph({children:[new TextRun({text:'اسم الطالب: '+d.student,size:24})],alignment:ctr}));
-      if(d.supervisor) children.push(new Paragraph({children:[new TextRun({text:'المشرف: '+d.supervisor,size:24})],alignment:ctr}));
-      if(d.semester) children.push(new Paragraph({children:[new TextRun({text:'الفصل الدراسي: '+d.semester,size:24})],alignment:ctr}));
-      // TOC (new page)
-      children.push(h('فهرس المحتويات',HeadingLevel.HEADING_1,true));
-      ['المقدمة','مشكلة البحث وتساؤلاته',...(d.chapters||[]).map((ch,i)=>`المبحث ${nums[i]||i+1}: ${ch.title}`),'الخاتمة والنتائج والتوصيات','قائمة المراجع'].forEach(item=>children.push(p(item)));
-      // Intro (new page)
-      if(d.intro){children.push(h('المقدمة',HeadingLevel.HEADING_1,true));d.intro.split('\n').filter(l=>l.trim()).forEach(l=>{children.push(p(l));children.push(gap());});}
-      // Problem
-      if(d.problem){children.push(h('مشكلة البحث',HeadingLevel.HEADING_1));d.problem.split('\n').filter(l=>l.trim()).forEach(l=>children.push(p(l)));
-        if((d.questions||[]).length){children.push(gap());children.push(h('تساؤلات البحث',HeadingLevel.HEADING_2));d.questions.forEach((q,i)=>children.push(p(`${i+1}. ${q}`)));}}
-      // Chapters
+      // ════ COVER PAGE ════
+      for(let i=0;i<7;i++) children.push(gap());
+      children.push(pc(d.dept||c.name, 28, ACCENT, true));
+      for(let i=0;i<3;i++) children.push(gap());
+      children.push(pc(d.title, 44, '111111', true));
+      for(let i=0;i<5;i++) children.push(gap());
+      children.push(pc('بحث مقدم استكمالاً لمتطلبات المقرر', 22, '888888'));
+      for(let i=0;i<3;i++) children.push(gap());
+      if(d.student)   children.push(pc('إعداد: '+d.student, 26, '222222', true));
+      if(d.supervisor) children.push(pc('إشراف: '+d.supervisor, 24, '444444'));
+      if(d.semester)  children.push(pc(d.semester, 22, '888888'));
+
+      // ════ TOC ════
+      children.push(h1('فهرس المحتويات', true));
+      const tocList = ['المقدمة','مشكلة البحث وتساؤلاته'];
+      (d.chapters||[]).forEach((ch,i)=>tocList.push(`المبحث ${nums[i]||i+1}: ${clean(ch.title)}`));
+      tocList.push('الخاتمة والنتائج والتوصيات','قائمة المراجع');
+      tocList.forEach(item=>children.push(p(item)));
+
+      // ════ INTRO ════
+      if(d.intro){
+        children.push(h1('المقدمة', true));
+        d.intro.split('\n').filter(l=>l.trim()).forEach(l=>children.push(p(l)));
+      }
+
+      // ════ PROBLEM ════
+      if(d.problem){
+        children.push(h1('مشكلة البحث'));
+        d.problem.split('\n').filter(l=>l.trim()).forEach(l=>children.push(p(l)));
+        if((d.questions||[]).length){
+          children.push(gap());
+          children.push(h2('تساؤلات البحث'));
+          d.questions.forEach((q,i)=>children.push(li(q,i)));
+        }
+      }
+
+      // ════ CHAPTERS ════
       (d.chapters||[]).forEach((ch,i)=>{
-        children.push(h(`المبحث ${nums[i]||i+1}: ${ch.title}`,HeadingLevel.HEADING_1,true));
-        (ch.sections||[]).forEach(s=>{children.push(h(s.title,HeadingLevel.HEADING_2));(s.content||'').split('\n').filter(l=>l.trim()).forEach(l=>{children.push(p(l));children.push(gap());});});
+        children.push(h1(`المبحث ${nums[i]||i+1}: ${clean(ch.title)}`, true));
+        (ch.sections||[]).forEach(s=>{
+          children.push(h2(s.title));
+          (s.content||'').split('\n').filter(l=>l.trim()).forEach(l=>children.push(p(l)));
+        });
       });
-      // Conclusion (new page)
-      if(d.conclusion){children.push(h('الخاتمة',HeadingLevel.HEADING_1,true));d.conclusion.split('\n').filter(l=>l.trim()).forEach(l=>{children.push(p(l));children.push(gap());});}
-      if((d.results||[]).length){children.push(h('نتائج البحث',HeadingLevel.HEADING_2));d.results.forEach((r,i)=>children.push(p(`${i+1}. ${r}`)));children.push(gap());}
-      if((d.recommendations||[]).length){children.push(h('التوصيات',HeadingLevel.HEADING_2));d.recommendations.forEach((r,i)=>children.push(p(`${i+1}. ${r}`)));}
-      // References (new page)
-      if((d.references||[]).length){children.push(h('قائمة المراجع',HeadingLevel.HEADING_1,true));d.references.forEach((r,i)=>{children.push(p(`[${i+1}] ${r.citation||r}`));children.push(gap());});}
+
+      // ════ CONCLUSION ════
+      if(d.conclusion){
+        children.push(h1('الخاتمة', true));
+        d.conclusion.split('\n').filter(l=>l.trim()).forEach(l=>children.push(p(l)));
+      }
+      if((d.results||[]).length){
+        children.push(gap());
+        children.push(h2('نتائج البحث'));
+        d.results.forEach((r,i)=>children.push(li(r,i)));
+        children.push(gap());
+      }
+      if((d.recommendations||[]).length){
+        children.push(h2('التوصيات والمقترحات'));
+        d.recommendations.forEach((r,i)=>children.push(li(r,i)));
+      }
+
+      // ════ REFERENCES ════
+      if((d.references||[]).length){
+        children.push(h1('قائمة المراجع', true));
+        d.references.forEach((r,i)=>{
+          children.push(new Paragraph({
+            children:[
+              new TextRun({text:`[${i+1}] `, bold:true, size:22, color:ACCENT, font:'Arial'}),
+              new TextRun({text:clean(r.citation||r), size:22, color:'333333', font:'Arial'})
+            ],
+            alignment: right, bidirectional: true,
+            spacing: { before: 80, after: 80 }
+          }));
+        });
+      }
     } else {
+      // Fallback for raw-text research
       const lines = (c.researchText||'').split('\n').filter(l=>l.trim());
-      children.push(new Paragraph({children:[new TextRun({text:c.researchTopic||c.name,bold:true,size:32})],alignment:ctr}));
-      lines.forEach(line=>{if(line.startsWith('#'))children.push(h(line.replace(/^#+\s*/,''),HeadingLevel.HEADING_1));else children.push(p(line));});
+      children.push(pc(c.researchTopic||c.name, 40, '111111', true));
+      for(let i=0;i<4;i++) children.push(gap());
+      lines.forEach(line=>{
+        if(line.startsWith('###')) children.push(h2(line.replace(/^#+\s*/,'')));
+        else if(line.startsWith('#')) children.push(h1(line.replace(/^#+\s*/,'')));
+        else if(line.trim()) children.push(p(line));
+      });
     }
-    const doc = new Document({sections:[{properties:{},children}]});
+
+    const doc = new Document({
+      sections: [{
+        properties: { page: { margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } },
+        children
+      }]
+    });
     const blob = await Packer.toBlob(doc);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1965,41 +2077,45 @@ async function exportPPT(cid) {
     if(d?.student) s0.addText('الطالب: '+d.student,{x:.5,y:3.8,w:9,h:.5,fontSize:14,color:'BBDDEE',align:'center'});
     if(d?.supervisor) s0.addText('المشرف: '+d.supervisor,{x:.5,y:4.3,w:9,h:.5,fontSize:14,color:'BBDDEE',align:'center'});
     if(d?.semester) s0.addText(d.semester,{x:.5,y:4.8,w:9,h:.4,fontSize:12,color:'88AACC',align:'center'});
+    const cleanPPT = s => String(s||'').replace(/\[م\d+\]/g,'').replace(/\*{1,2}([^*\n]+)\*{1,2}/g,'$1').trim();
     function mkSlide(title, bodyLines, ac) {
       const cl = ac || '1A5F7A';
       const sl = pptx.addSlide();
-      sl.background = { color: 'F8FAFC' };
-      sl.addText(title, { x:.3, y:.15, w:9.4, h:.8, fontSize:18, color:cl, bold:true, valign:'middle' });
+      sl.background = { color: 'F0F5F8' };
+      // Title as a colored text box (fill acts as header bar)
+      sl.addText(cleanPPT(title), { x:0, y:0, w:'100%', h:1.05, fontSize:20, color:'FFFFFF', bold:true, valign:'middle', align:'right', rtlMode:true, fill:{color:cl}, margin:16 });
       if (bodyLines && bodyLines.length) {
-        const body = bodyLines.slice(0,9).map(l => '• ' + String(l||'').slice(0,120)).join('\n');
-        sl.addText(body, { x:.3, y:1.1, w:9.4, h:5.5, fontSize:12, color:'333333', valign:'top' });
+        const items = bodyLines.slice(0,9).map(l=>({ text:'• '+cleanPPT(String(l||'')).slice(0,110)+'\n' }));
+        sl.addText(items, { x:.3, y:1.15, w:9.4, h:5.4, fontSize:13, color:'222222', valign:'top', align:'right', rtlMode:true, paraSpaceAfter:5 });
       }
     }
     if (d) {
-      if (d.intro) mkSlide('المقدمة', d.intro.split('\n').filter(l=>l.trim()).slice(0,7));
+      if (d.intro) mkSlide('المقدمة', d.intro.split('\n').filter(l=>l.trim()).slice(0,8));
       if (d.problem) {
         const qs = (d.questions||[]).map((q,i)=>`${i+1}. ${q}`);
-        mkSlide('مشكلة البحث وتساؤلاته', [(d.problem.split('\n')[0]||'').slice(0,150), ...qs], '9A6F0A');
+        mkSlide('مشكلة البحث وتساؤلاته', [(d.problem.split('\n')[0]||'').slice(0,160), ...qs], 'C17B00');
       }
       (d.chapters||[]).forEach((ch,i) => {
-        const pts = (ch.sections||[]).flatMap(s => [s.title+':', ...(s.content||'').split('\n').filter(l=>l.trim()).slice(0,3)]);
-        mkSlide(`المبحث ${nums[i]||i+1}: ${ch.title}`, pts.slice(0,8));
+        const pts = (ch.sections||[]).flatMap(s => [`◆ ${cleanPPT(s.title)}`, ...(s.content||'').split('\n').filter(l=>l.trim()).slice(0,4)]);
+        mkSlide(`المبحث ${nums[i]||i+1}: ${cleanPPT(ch.title)}`, pts.slice(0,9));
       });
-      const resLines = [...((d.conclusion||'').split('\n').filter(l=>l.trim()).slice(0,2)), ...(d.results||[]).slice(0,5)];
-      if (resLines.length) mkSlide('الخاتمة والنتائج', resLines, '276749');
-      if ((d.recommendations||[]).length) mkSlide('التوصيات والمقترحات', d.recommendations, '9A6F0A');
+      const resLines = [...((d.conclusion||'').split('\n').filter(l=>l.trim()).slice(0,3)), ...(d.results||[]).map((r,i)=>`${i+1}. ${r}`).slice(0,5)];
+      if (resLines.length) mkSlide('الخاتمة والنتائج', resLines, '1A6B3A');
+      if ((d.recommendations||[]).length) mkSlide('التوصيات والمقترحات', d.recommendations.map((r,i)=>`${i+1}. ${r}`), 'C17B00');
       if ((d.references||[]).length) {
         const sr = pptx.addSlide(); sr.background = { color: '0D1B2A' };
-        sr.addText('قائمة المراجع', { x:.4, y:.2, w:9.2, h:.7, fontSize:18, color:'FFFFFF', bold:true });
-        const refTxt = d.references.slice(0,8).map((r,i)=>`[${i+1}] ${(r.citation||r).slice(0,100)}`).join('\n');
-        sr.addText(refTxt, { x:.4, y:1.0, w:9.2, h:5.5, fontSize:10, color:'CCCCCC', valign:'top' });
+        sr.addText('قائمة المراجع', { x:0, y:0, w:'100%', h:1.0, fontSize:20, color:'FFFFFF', bold:true, align:'right', rtlMode:true, fill:{color:'1A5F7A'}, margin:14 });
+        const refItems = d.references.slice(0,10).map((r,i)=>({text:`[${i+1}] ${cleanPPT(r.citation||r).slice(0,100)}\n`}));
+        sr.addText(refItems, { x:.4, y:1.1, w:9.2, h:5.3, fontSize:10, color:'CCDDEE', valign:'top', align:'right', rtlMode:true, paraSpaceAfter:4 });
       }
     } else {
       const lines = text.split('\n').filter(l=>l.trim()); let cur=null, blist=[];
-      const flush2 = () => { if(!cur||!blist.length) return; cur.addText(blist.slice(0,8).join('\n'), {x:.3,y:1.1,w:9.4,h:5.5,fontSize:12,color:'333333',valign:'top'}); blist=[]; };
+      const flush2 = () => { if(!cur||!blist.length) return;
+        cur.addText(blist.slice(0,8).map(l=>({text:l+'\n'})), {x:.4,y:1.25,w:9.2,h:5.3,fontSize:13,color:'222222',valign:'top',align:'right',rtlMode:true}); blist=[]; };
       lines.forEach(line => {
-        if (line.startsWith('#')) { flush2(); cur=pptx.addSlide(); cur.background={color:'F8FAFC'}; cur.addText(line.replace(/^#+\s*/,''), {x:.3,y:.15,w:9.4,h:.8,fontSize:18,color:'1A5F7A',bold:true}); }
-        else if (cur && line.trim()) { blist.push('• '+line.trim()); if(blist.length>=8) flush2(); }
+        if (line.startsWith('#')) { flush2(); cur=pptx.addSlide(); cur.background={color:'F0F5F8'};
+          cur.addText(cleanPPT(line.replace(/^#+\s*/,'')), {x:0,y:0,w:'100%',h:1.05,fontSize:20,color:'FFFFFF',bold:true,align:'right',rtlMode:true,fill:{color:'1A5F7A'},margin:16}); }
+        else if (cur && line.trim()) { blist.push('• '+cleanPPT(line)); if(blist.length>=8) flush2(); }
       }); flush2();
     }
     const fname = (d?.title||c.researchTopic||c.name).replace(/[^\w؀-ۿ ]/g,'')+'.pptx';
