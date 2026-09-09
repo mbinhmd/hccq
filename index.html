@@ -1066,14 +1066,17 @@ function showResearch(d, cid) {
           const title = extractBookTitle(cit);
           const author = extractAuthorLastName(cit);
           const sq = r.searchQuery||'';
-          // Check if searchQuery is a real archive.org identifier (alphanumeric, no spaces)
-          const isArchiveId = /^[A-Za-z0-9_.\-]{4,120}$/.test(sq) && !sq.includes(' ');
-          const arQ = encodeURIComponent((title+' '+author).trim().slice(0,70));
-          const enQ = encodeURIComponent(title.slice(0,70));
+          // Real archive.org identifier = alphanumeric only, no spaces, no Arabic
+          const isArchiveId = /^[A-Za-z0-9_.\-]{4,120}$/.test(sq) && !sq.includes(' ') && !/[؀-ۿ]/.test(sq);
+          // Use 2-3 keywords for search (not full title — archive.org can't find long Arabic titles)
+          const kw = archiveKeywords(title, 3) || title.split(' ').slice(0,2).join(' ');
+          const arQ = encodeURIComponent(kw.slice(0,50));
+          const noorQ = encodeURIComponent((kw+' '+author).trim().slice(0,60));
+          const enQ = encodeURIComponent(title.slice(0,60));
           // Links
-          const archiveDirectUrl  = isArchiveId ? `https://archive.org/details/${sq}` : null;
-          const archiveSearchUrl  = `https://archive.org/search?query=${isAr?arQ:enQ}&and%5B%5D=mediatype%3A%22texts%22${isAr?'&and%5B%5D=language%3A%22Arabic%22':''}`;
-          const noorUrl = `https://www.noor-book.com/search#q=${arQ}`;
+          const archiveDirectUrl = isArchiveId ? `https://archive.org/details/${sq}` : null;
+          const archiveSearchUrl = `https://archive.org/search?query=${isAr?arQ:enQ}&and%5B%5D=mediatype%3A%22texts%22${isAr?'&and%5B%5D=language%3A%22Arabic%22':''}`;
+          const noorUrl = `https://www.noor-book.com/search#q=${noorQ}`;
           const schUrl  = `https://scholar.google.com/scholar?q=${enQ}`;
           const rgUrl   = `https://www.researchgate.net/search?q=${enQ}`;
           const btn  = (href,bg,label) => `<a href="${href}" target="_blank" rel="noopener" style="font-size:12px;color:#fff;background:${bg};border-radius:6px;padding:6px 13px;text-decoration:none;font-weight:700;display:inline-flex;align-items:center;gap:5px">${label}</a>`;
@@ -1162,9 +1165,15 @@ function extractAuthorLastName(cit) {
 }
 
 // ── Archive.org real books fetch ──
+function archiveKeywords(text, n=3) {
+  const stops = new Set(['في','من','على','إلى','عن','مع','لدى','أو','كما','قد','لم','هذا','هذه','التي','الذي','وهو','وهي','لاستخدام','وتأثير','والأثر','دراسة','بحث','أثر','تأثير','دور','أهمية','مفهوم','واقع','نحو','ماهية','وسائل','وأثر','استخدام','وفاعلية','فاعلية']);
+  return text.replace(/[^؀-ۿ\s]/g,'').split(/\s+/).filter(w=>w.length>3&&!stops.has(w)).slice(0,n).join(' ');
+}
+
 async function fetchArchiveBooks(topic, count) {
   try {
-    const q = encodeURIComponent(`(language:arabic OR subject:arabic) ${topic}`);
+    const kw = archiveKeywords(topic, 3) || topic.split(' ').slice(0,2).join(' ');
+    const q = encodeURIComponent(`language:arabic ${kw}`);
     const url = `https://archive.org/advancedsearch.php?q=${q}&fl[]=title&fl[]=creator&fl[]=date&fl[]=identifier&output=json&rows=${count+5}&mediatype=texts&sort[]=downloads+desc`;
     const ctrl = new AbortController();
     const t = setTimeout(()=>ctrl.abort(), 10000);
