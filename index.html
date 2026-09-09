@@ -1095,7 +1095,12 @@ function showResearch(d, cid) {
   const nums = ['الأول','الثاني','الثالث','الرابع','الخامس'];
   const cc = S.courses.find(x=>x.id===cid);
   const sl = cc?.srcLegend||[];
-  const cite = (text) => sl.length ? applyCitations(esc(text), sl) : esc(text);
+  // Convert newline-separated paragraphs to HTML paragraphs, then apply citations
+  const cite = (text) => {
+    const paras = String(text||'').split(/\n\n+/).map(p=>p.replace(/\n/g,' ').trim()).filter(Boolean);
+    const html = paras.map(p=>`<span style="display:block;margin-bottom:1em">${sl.length ? applyCitations(esc(p), sl) : esc(p)}</span>`).join('');
+    return html || (sl.length ? applyCitations(esc(text), sl) : esc(text));
+  };
   let html = '';
   // Cover
   html += `<div class="sbox" style="text-align:center;border-top:4px solid var(--accent);padding:28px">
@@ -1218,21 +1223,34 @@ function clearResearch(cid) {
 
 function parseResearchText(text, chapCount) {
   const cleanBody = s => s
-    .replace(/\.{2,}\s*#{0,6}\s*$/gm, '.')         // "...##" at line end
-    .replace(/^\s*#{1,6}\s+[^\n]*/gm, '')           // ## headings at line start (e.g. ## الفرع)
-    .replace(/\s*#{1,6}\s*$/gm, '')                  // trailing # at line end
+    .replace(/\.{2,}\s*#{0,6}\s*$/gm, '.')
+    .replace(/^\s*#{1,6}\s+[^\n]*/gm, '')           // ## headings at line start
+    .replace(/\s*#{1,6}\s*$/gm, '')
     .replace(/===\w+===[^\n]*/g, '')                 // stray section markers
     .replace(/\[.*?اكتب.*?\]/g, '')                  // instruction placeholders
-    .replace(/\*{1,2}[^*]{0,60}(?:كلمة|كلمات)[^*]{0,40}\*{1,2}/g, '')  // **الكلمات الإجمالية...** metadata
-    .replace(/^\d{1,2}[\.\)]\s+/gm, '')             // remove leading numbers like "7. " "8. " from prose lines
-    .replace(/\n{3,}/g, '\n\n')                      // collapse excessive blank lines
+    .replace(/\*{1,2}[^*]{0,60}(?:كلمة|كلمات)[^*]{0,40}\*{1,2}/g, '')
+    .replace(/^\d{1,2}[\.\)]\s+/gm, '')             // strip "7. " from prose lines
+    .replace(/^---+\s*$/gm, '')                      // divider lines
+    .replace(/^[✅✓⚠️💡📌🔍]\s+.*/gm, '')           // meta-emoji lines (AI commentary)
+    .replace(/^\*{2}(?:ملاحظة|تنبيه|مهم|هام|للحصول|يمكن)[^*\n]*\*{2}.*/gm, '')
+    .replace(/^\*\s+(?:لم\s+تت|اسم\s+الم|السنة\s+|الناشر|رابط\s+|عدد\s+الص).*/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
-  const parts = text.split(/===([A-Z0-9_]+)===/);
+  const parts = text.split(/===\s*([A-Z0-9_]+)\s*===/);   // tolerant of spaces around marker
   const sec = {};
   for (let i = 1; i < parts.length; i += 2) { if (parts[i]) sec[parts[i]] = cleanBody((parts[i+1]||'')); }
   const list = k => (sec[k]||'').split('\n')
-    .map(l=>l.replace(/^\d+[\.\-\)]\s*/,'').trim())
-    .filter(l=>l && !/^\.{2,}$/.test(l) && !/^#+$/.test(l) && l.length>3);
+    .map(l=>l.replace(/^\d+[\.\-\)]\s*/,'').replace(/^[-•]\s*/,'').trim())
+    .filter(l=>l && !/^\.{2,}$/.test(l) && !/^#+$/.test(l) && l.length>4);
+  // Filter REFS to only keep lines that look like actual citations (not AI meta-commentary)
+  const refsList = (sec['REFS']||'').split('\n')
+    .map(l=>l.replace(/^\d+[\.\-\)]\s*/,'').replace(/^[-•]\s*/,'').trim())
+    .filter(l=>{
+      if (!l || l.length < 15) return false;
+      if (/^[✅✓⚠️💡📌🔍]/.test(l)) return false;       // meta emojis
+      if (/(ملاحظ|للحصول|يمكنك|هل\s+تستطيع|التنسيق\s+الحالي|بيانات\s+المؤلف)/.test(l)) return false;
+      return true;
+    });
   const chapters = [];
   for (let i = 1; i <= chapCount; i++) {
     const t = sec[`CH${i}_TITLE`]; if (!t) continue;
@@ -1244,7 +1262,7 @@ function parseResearchText(text, chapCount) {
     title: sec['TITLE']||'', intro: sec['INTRO']||'', problem: sec['PROBLEM']||'',
     questions: list('QUESTIONS'), chapters,
     conclusion: sec['CONCLUSION']||'', results: list('RESULTS'), recommendations: list('RECOMMENDATIONS'),
-    references: list('REFS').map(r=>{ const p=r.split('|'); return {citation:(p[0]||r).trim(), searchQuery:(p[1]||p[0]||r).trim()}; })
+    references: refsList.map(r=>{ const p=r.split('|'); return {citation:(p[0]||r).trim(), searchQuery:(p[1]||p[0]||r).trim()}; })
   };
 }
 
@@ -1342,7 +1360,7 @@ async function genResearch(cid) {
   const out = document.getElementById('ro-'+cid);
   const chNums = ['الأول','الثاني','الثالث','الرابع','الخامس','السادس','السابع','الثامن','التاسع','العاشر'];
   const isAr = lang==='ar';
-  const totalWords = pageCount * 420;
+  const totalWords = pageCount * 520;
   const frontWords = Math.round(totalWords * 0.20);
   const chWords = Math.round(totalWords * 0.60 / chapCount);
   const backWords = Math.round(totalWords * 0.20);
@@ -1400,7 +1418,7 @@ async function genResearch(cid) {
     // ── خطوة لكل مبحث ──
     for (let i = 1; i <= chapCount; i++) {
       setProgress(isAr ? `🖊 كتابة المبحث ${chNums[i-1]}...` : `✍ Writing chapter ${i}...`);
-      const sw = Math.round(chWords*0.5);
+      const sw = Math.round(chWords*0.65);
       const chPrompt = isAr
         ? `${ctx}${citNote}\nهذا بحث عن "${topic}". اكتب المبحث ${chNums[i-1]} فقط. قاعدة صارمة: اكتب كل محتوى الفرع في فقرات نثرية متصلة — لا تضع أرقاماً أمام الجمل أو الفقرات، لا نقاط، لا قوائم — فقرات أكاديمية متماسكة فقط:\n\n===CH${i}_TITLE===\nعنوان المبحث ${chNums[i-1]} المرتبط بموضوع البحث\n\n===CH${i}_S1_TITLE===\nعنوان القسم الفرعي الأول\n\n===CH${i}_S1_CONTENT===\n[اكتب لا يقل عن ${sw} كلمة في فقرات نثرية أكاديمية متماسكة بدون أي ترقيم للفقرات. تحليل أكاديمي عميق مع استشهادات بأسماء باحثين وكتب حقيقية.]\n\n===CH${i}_S2_TITLE===\nعنوان القسم الفرعي الثاني\n\n===CH${i}_S2_CONTENT===\n[اكتب لا يقل عن ${sw} كلمة في فقرات نثرية أكاديمية متماسكة بدون أي ترقيم للفقرات. تحليل معمّق وتوسع في الأفكار.]`
         : `${ctx}${citNote}\nWrite ONLY chapter ${i}. STRICT RULE: write all content as flowing prose paragraphs — no numbers before sentences or paragraphs, no bullet points, no lists — only cohesive academic prose:\n\n===CH${i}_TITLE===\nChapter ${i} title relevant to topic\n\n===CH${i}_S1_TITLE===\nSub-section 1 title\n\n===CH${i}_S1_CONTENT===\n[Write at least ${sw} words as flowing prose paragraphs without any paragraph numbering. Deep academic analysis with real author/book citations.]\n\n===CH${i}_S2_TITLE===\nSub-section 2 title\n\n===CH${i}_S2_CONTENT===\n[Write at least ${sw} words as flowing prose paragraphs without any paragraph numbering. In-depth analysis.]`;
@@ -1553,7 +1571,7 @@ async function genResearchFromSources(cid) {
 
   const out = document.getElementById('ro-'+cid);
   const chNums = ['الأول','الثاني','الثالث','الرابع','الخامس','السادس','السابع','الثامن','التاسع','العاشر'];
-  const totalWords = pageCount * 420;
+  const totalWords = pageCount * 520;
   const frontWords = Math.round(totalWords * 0.20);
   const chWords = Math.round(totalWords * 0.60 / chapCount);
   const backWords = Math.round(totalWords * 0.20);
@@ -1628,12 +1646,13 @@ async function genResearchFromSources(cid) {
       : `${ctx}\nWrite:\n\n===CONCLUSION===\n[At least ${bw} words.]\n\n===RESULTS===\n1. ...\n2. ...\n3. ...\n\n===RECOMMENDATIONS===\n1. ...\n2. ...\n3. ...`;
     allText += await callAI(conclusionPrompt, null, 7000) + '\n';
 
-    setProgress(isAr ? '📚 بناء قائمة المراجع من مصادرك...' : '📚 Building references...');
-    const filesCtx = fileNamesList.map((n,i)=>`${i+1}. ${n}`).join('\n');
+    setProgress(isAr ? '📚 بناء قائمة المراجع...' : '📚 Building references...');
+    const refCount2 = Math.max(8, fileNamesList.length + 5);
+    const refsChunks = chunksCtx(rankChunks(allChunks, topic+' مرجع كتاب مؤلف', 5), srcLegend);
     const refsPrompt = isAr
-      ? `موضوع البحث: "${topic}". هذه هي الملفات التي رفعها الباحث كمصادر:\n${filesCtx}\n\nحوّل كل ملف لمرجع بتنسيق APA عربي كامل. استنتج المؤلف والسنة والناشر من اسم الملف إذا أمكن — وإلا استخدم اسم الملف كعنوان مع ناشر تقديري.\n\n===REFS===\n${fileNamesList.map((_,i)=>`${i+1}. ...`).join('\n')}`
-      : `Research topic: "${topic}". Uploaded files:\n${filesCtx}\n\nConvert each to APA format. Infer author/year/publisher from filename where possible.\n\n===REFS===\n${fileNamesList.map((_,i)=>`${i+1}. ...`).join('\n')}`;
-    allText += await callAI(refsPrompt, null, 3000);
+      ? `موضوع البحث: "${topic}".\n\nالملفات المرفوعة:\n${fileNamesList.map((n,i)=>`${i+1}. ${n}`).join('\n')}\n\nاكتب قائمة مراجع أكاديمية كاملة بتنسيق APA:\n1. لكل ملف مرفوع: اعتمد على المحتوى المرفق لاستخراج اسم المؤلف والسنة والناشر — إذا لم تجدها فاستخدم اسم الملف كعنوان وأضف معلومات منطقية.\n2. أضف ${Math.max(5, refCount2 - fileNamesList.length)} مراجع أكاديمية حقيقية إضافية من كتب ودراسات معتمدة تتعلق بالموضوع.\n\nكل مرجع يجب أن يكون كاملاً: اللقب، الاسم. (السنة). عنوان الكتاب. المدينة: دار النشر.\n\n===REFS===\n${Array.from({length:refCount2},(_,i)=>`${i+1}. ...`).join('\n')}`
+      : `Research topic: "${topic}".\n\nUploaded files:\n${fileNamesList.map((n,i)=>`${i+1}. ${n}`).join('\n')}\n\nWrite complete APA reference list:\n1. For each uploaded file: extract author/year/publisher from attached content — if not found, use filename as title with plausible details.\n2. Add ${Math.max(5, refCount2 - fileNamesList.length)} additional real academic references on the topic.\n\n===REFS===\n${Array.from({length:refCount2},(_,i)=>`${i+1}. ...`).join('\n')}`;
+    allText += await callAI(refsPrompt + refsChunks, null, 4000);
 
     setProgress(isAr ? '⚙️ تجميع البحث...' : '⚙️ Assembling...');
     const data = parseResearchText(allText, chapCount);
@@ -1966,16 +1985,19 @@ async function exportWord(cid) {
       tocList.push('الخاتمة والنتائج والتوصيات','قائمة المراجع');
       tocList.forEach(item=>children.push(p(item)));
 
+      // helper: split text into paragraphs (double-newline = paragraph break, single = same para)
+      const paras = (txt) => String(txt||'').split(/\n\n+/).map(b=>b.replace(/\n/g,' ').trim()).filter(Boolean);
+
       // ════ INTRO ════
       if(d.intro){
         children.push(h1('المقدمة', true));
-        d.intro.split('\n').filter(l=>l.trim()).forEach(l=>children.push(p(l)));
+        paras(d.intro).forEach(b=>children.push(p(b)));
       }
 
       // ════ PROBLEM ════
       if(d.problem){
         children.push(h1('مشكلة البحث'));
-        d.problem.split('\n').filter(l=>l.trim()).forEach(l=>children.push(p(l)));
+        paras(d.problem).forEach(b=>children.push(p(b)));
         if((d.questions||[]).length){
           children.push(gap());
           children.push(h2('تساؤلات البحث'));
@@ -1988,14 +2010,14 @@ async function exportWord(cid) {
         children.push(h1(`المبحث ${nums[i]||i+1}: ${clean(ch.title)}`, true));
         (ch.sections||[]).forEach(s=>{
           children.push(h2(s.title));
-          (s.content||'').split('\n').filter(l=>l.trim()).forEach(l=>children.push(p(l)));
+          paras(s.content).forEach(b=>children.push(p(b)));
         });
       });
 
       // ════ CONCLUSION ════
       if(d.conclusion){
         children.push(h1('الخاتمة', true));
-        d.conclusion.split('\n').filter(l=>l.trim()).forEach(l=>children.push(p(l)));
+        paras(d.conclusion).forEach(b=>children.push(p(b)));
       }
       if((d.results||[]).length){
         children.push(gap());
@@ -2024,13 +2046,14 @@ async function exportWord(cid) {
       }
     } else {
       // Fallback for raw-text research
-      const lines = (c.researchText||'').split('\n').filter(l=>l.trim());
+      const rawParas = (c.researchText||'').split(/\n\n+/).filter(b=>b.trim());
       children.push(pc(c.researchTopic||c.name, 40, '111111', true));
       for(let i=0;i<4;i++) children.push(gap());
-      lines.forEach(line=>{
-        if(line.startsWith('###')) children.push(h2(line.replace(/^#+\s*/,'')));
-        else if(line.startsWith('#')) children.push(h1(line.replace(/^#+\s*/,'')));
-        else if(line.trim()) children.push(p(line));
+      rawParas.forEach(block=>{
+        const first = block.trimStart();
+        if(first.startsWith('###')) children.push(h2(first.replace(/^#+\s*/,'')));
+        else if(first.startsWith('#')) children.push(h1(first.replace(/^#+\s*/,'')));
+        else children.push(p(block.replace(/\n/g,' ').trim()));
       });
     }
 
