@@ -1594,25 +1594,27 @@ async function genResearchFromSources(cid) {
     }
 
     const ctx = isAr
-      ? `موضوع البحث: "${topic}" — المقرر: "${c.name}"\nالأسلوب: فصحى أكاديمية واضحة ومفهومة، مناسبة لمستوى طالب جامعي — ابتعد عن التعقيد والمصطلحات المعقدة غير الضرورية. اكتب بحثاً أكاديمياً شاملاً من معلوماتك، وعزّز الأفكار بالمصادر المرفوعة. ضع [م1] أو [م2] في نهاية كل جملة مدعومة بمصدر. تحظر: # أو ## أو ...`
-      : `Research topic: "${topic}" — Course: "${c.name}"\nStyle: clear academic English for undergraduate level — avoid unnecessary complexity. Write comprehensive research from your knowledge and support ideas with uploaded sources. Place [s1] or [s2] after each supported sentence. FORBIDDEN: # headers, ...`;
-    const citNote = isAr ? '\nمهم: اكتب بأسلوب أكاديمي مبسط واضح يناسب الطالب الجامعي. استعن بالمصادر المرفوعة لتعزيز أفكارك — ضع [م1] أو [م2] في نهاية كل جملة مأخوذة أو مدعومة منها.' : '\nIMPORTANT: Write clearly at undergraduate level. Use attached sources to support ideas — mark each supported sentence with [s1] or [s2].';
+      ? `موضوع البحث: "${topic}" — المقرر: "${c.name}"\nالأسلوب: فصحى أكاديمية واضحة مناسبة لطالب جامعي. اكتب بحثاً شاملاً معززاً بالمصادر المرفوعة.\nقواعد الكتابة الإلزامية:\n• اكتب كل قسم في فقرات نثرية متماسكة متصلة — النثر الأكاديمي هو المطلوب\n• محظور تماماً استخدام النقاط أو القوائم المرقمة داخل المقدمة والمشكلة وفقرات المباحث\n• النقاط المرقمة مسموحة فقط في: تساؤلات البحث، النتائج، التوصيات\n• ضع [م1] أو [م2] في نهاية الجملة المدعومة بمصدر مباشرة\n• تحظر: # أو ## أو ... أو رموز اختصار`
+      : `Research topic: "${topic}" — Course: "${c.name}"\nStyle: clear academic English for undergraduate level.\nMANDATORY writing rules:\n• Write every section in cohesive prose paragraphs — no bullet points or numbered lists inside intro, problem, or chapter content\n• Bullet/numbered lists are ONLY allowed in: research questions, results, recommendations\n• Place [s1] or [s2] at the end of each sentence supported by a source\n• FORBIDDEN: # headers, ... ellipsis`;
+    const citNote = isAr
+      ? '\nمهم: اعتمد على المصادر المرفوعة لتعزيز أفكارك في شكل فقرات نثرية أكاديمية — لا نقاط ولا ترقيم داخل محتوى الفقرات.'
+      : '\nIMPORTANT: Use attached sources to enrich ideas, written as cohesive academic prose — no bullets or numbered lists inside paragraph content.';
 
     let allText = '';
 
     setProgress(isAr ? '🖊 كتابة المقدمة ومشكلة البحث...' : '✍ Writing introduction...');
     const fw1=Math.round(frontWords*0.55), fw2=Math.round(frontWords*0.25);
     const frontPrompt = isAr
-      ? `${ctx}${citNote}\n\n===TITLE===\nالعنوان الكامل للبحث\n\n===INTRO===\n[اكتب مقدمة أكاديمية لا تقل عن ${fw1} كلمة مستخلصة من مصادرك.]\n\n===PROBLEM===\n[اكتب مشكلة البحث لا تقل عن ${fw2} كلمة.]\n\n===QUESTIONS===\n1. التساؤل الأول؟\n2. التساؤل الثاني؟\n3. التساؤل الثالث؟`
-      : `${ctx}${citNote}\n\n===TITLE===\nFull title\n\n===INTRO===\n[At least ${fw1} words from your sources.]\n\n===PROBLEM===\n[At least ${fw2} words.]\n\n===QUESTIONS===\n1. ...\n2. ...\n3. ...`;
+      ? `${ctx}${citNote}\n\n===TITLE===\nالعنوان الكامل للبحث\n\n===INTRO===\n[اكتب مقدمة أكاديمية في فقرات نثرية متصلة لا تقل عن ${fw1} كلمة — لا نقاط ولا ترقيم. تناول: أهمية الموضوع وخلفيته وأهداف البحث.]\n\n===PROBLEM===\n[اكتب مشكلة البحث في فقرات نثرية متصلة لا تقل عن ${fw2} كلمة — لا نقاط ولا ترقيم.]\n\n===QUESTIONS===\n1. التساؤل الأول؟\n2. التساؤل الثاني؟\n3. التساؤل الثالث؟`
+      : `${ctx}${citNote}\n\n===TITLE===\nFull title\n\n===INTRO===\n[Write introduction as flowing prose paragraphs, at least ${fw1} words. No bullet points.]\n\n===PROBLEM===\n[Write as flowing prose, at least ${fw2} words. No bullet points.]\n\n===QUESTIONS===\n1. ...\n2. ...\n3. ...`;
     allText += await callAI(frontPrompt + chunksCtx(rankChunks(allChunks, topic+' مقدمة تمهيد', 7), srcLegend), null, 8000) + '\n';
 
     for (let i=1; i<=chapCount; i++) {
       setProgress(isAr ? `🖊 كتابة المبحث ${chNums[i-1]}...` : `✍ Writing chapter ${i}...`);
       const sw=Math.round(chWords*0.5);
       const chPrompt = isAr
-        ? `${ctx}${citNote}\nاكتب المبحث ${chNums[i-1]} فقط:\n\n===CH${i}_TITLE===\nعنوان المبحث\n\n===CH${i}_S1_TITLE===\nعنوان الفرع الأول\n\n===CH${i}_S1_CONTENT===\n[لا يقل عن ${sw} كلمة من مصادرك.]\n\n===CH${i}_S2_TITLE===\nعنوان الفرع الثاني\n\n===CH${i}_S2_CONTENT===\n[لا يقل عن ${sw} كلمة من مصادرك.]`
-        : `${ctx}${citNote}\nWrite chapter ${i} only:\n\n===CH${i}_TITLE===\n...\n\n===CH${i}_S1_TITLE===\n...\n\n===CH${i}_S1_CONTENT===\n[At least ${sw} words from sources.]\n\n===CH${i}_S2_TITLE===\n...\n\n===CH${i}_S2_CONTENT===\n[At least ${sw} words from sources.]`;
+        ? `${ctx}${citNote}\nاكتب المبحث ${chNums[i-1]} فقط — كل المحتوى في فقرات نثرية أكاديمية متماسكة، لا نقاط ولا قوائم:\n\n===CH${i}_TITLE===\nعنوان المبحث الكامل\n\n===CH${i}_S1_TITLE===\nعنوان الفرع الأول\n\n===CH${i}_S1_CONTENT===\n[اكتب في فقرات نثرية متصلة لا تقل عن ${sw} كلمة. تحليل أكاديمي عميق مع استشهادات من مصادرك. لا نقاط ولا قوائم مطلقاً.]\n\n===CH${i}_S2_TITLE===\nعنوان الفرع الثاني\n\n===CH${i}_S2_CONTENT===\n[اكتب في فقرات نثرية متصلة لا تقل عن ${sw} كلمة. تحليل معمّق ونقاش أكاديمي. لا نقاط ولا قوائم مطلقاً.]`
+        : `${ctx}${citNote}\nWrite chapter ${i} only — all content as cohesive academic prose, NO bullet points or lists:\n\n===CH${i}_TITLE===\nFull chapter title\n\n===CH${i}_S1_TITLE===\nSub-section 1 title\n\n===CH${i}_S1_CONTENT===\n[Write as flowing prose paragraphs, at least ${sw} words. Deep academic analysis with citations. Absolutely no bullet points.]\n\n===CH${i}_S2_TITLE===\nSub-section 2 title\n\n===CH${i}_S2_CONTENT===\n[Write as flowing prose paragraphs, at least ${sw} words. No bullet points.]`;
       allText += await callAI(chPrompt + chunksCtx(rankChunks(allChunks, topic+' '+chNums[i-1], 7), srcLegend), null, 8000) + '\n';
     }
 
